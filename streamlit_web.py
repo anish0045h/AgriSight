@@ -12,7 +12,7 @@ import numpy as np
 #from lightgbm import LGBMRegressor
 import sqlite3
 
-st.set_page_config(layout="wide")
+#st.set_page_config(layout="wide")
 st.title("Agmarknet Price Report")
 
 # Function to load crop options (cached)
@@ -70,24 +70,25 @@ with st.spinner(f"Loading {selected_crop_display} data..."):
                 'Min Price (Rs./Quintal)': 'Min_Price',
                 'Max Price (Rs./Quintal)': 'Max_Price',
                 'Modal Price (Rs./Quintal)': 'Modal_Price',
+                'Price Date' : 'Date'
             }, inplace=True)
         except Exception:
             pass
         # Parse last column as Date (day-first) and sort
-        try:
-            df['Date'] = pd.to_datetime(df.iloc[:, -1], dayfirst=True, errors='coerce')
+        # Parse the correct Date column (do NOT use iloc[:, -1])
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
             df = df.sort_values(by='Date')
             # Date-derived features
-            if 'Date' in df.columns:
-                df['Year'] = df['Date'].dt.year
-                df['Month'] = df['Date'].dt.month
-                df['Quarter'] = df['Date'].dt.quarter
-                df['Day'] = df['Date'].dt.day
-                df['day_of_week'] = df['Date'].dt.dayofweek
-                df['week_of_year'] = df['Date'].dt.isocalendar().week
-                df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
-        except Exception:
-            pass
+            df['Year'] = df['Date'].dt.year
+            df['Month'] = df['Date'].dt.month
+            df['Quarter'] = df['Date'].dt.quarter
+            df['Day'] = df['Date'].dt.day
+            df['day_of_week'] = df['Date'].dt.dayofweek
+            df['week_of_year'] = df['Date'].dt.isocalendar().week
+            df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
+        else:
+            st.warning("No 'Date' column found after renaming. Please check your dataset.")
         st.success("File loaded successfully ✅")
         st.write("### Dataset Preview")
         st.dataframe(df.head())
@@ -313,120 +314,41 @@ with st.spinner(f"Loading {selected_crop_display} data..."):
         st.write("---")
         st.subheader("🌾 Crop-Specific Insights")
 
-        if selected_crop_display == "Tomato":
-            st.write("🍅 **Tomato Market Analysis:**")
-            if 'Modal_Price' in df_filtered.columns:
-                avg_price = df_filtered['Modal_Price'].mean()
-                price_volatility = df_filtered['Modal_Price'].std()
-                st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
-                st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
+        st.write(f"📊 **{selected_crop_display} Market Analysis:**")
+        if 'Modal_Price' in df_filtered.columns:
+            avg_price = df_filtered['Modal_Price'].mean()
+            price_volatility = df_filtered['Modal_Price'].std()
+            st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
+            st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
 
-                if 'Month' in df_filtered.columns:
-                    monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
-                    best_month = monthly_avg.idxmax()
-                    worst_month = monthly_avg.idxmin()
-                    st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
-                    st.write(
-                        f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
+            if 'Month' in df_filtered.columns:
+                monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
+                best_month = monthly_avg.idxmax()
+                worst_month = monthly_avg.idxmin()
+                st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
+                st.write(f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
 
-                if 'District Name' in df_filtered.columns:
-                    top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
-                    st.write(f"• **Highest Price District:** {top_district}")
+            if 'District Name' in df_filtered.columns:
+                top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
+                st.write(f"• **Highest Price District:** {top_district}")
 
-            st.write(
-                "💡 **Tomato Insights:** Tomatoes are highly seasonal with significant price fluctuations. Prices typically peak during monsoon and winter months due to supply constraints.")
-
-        elif selected_crop_display == "Coconut":
-            st.write("🥥 **Coconut Market Analysis:**")
-            if 'Modal_Price' in df_filtered.columns:
-                avg_price = df_filtered['Modal_Price'].mean()
-                price_volatility = df_filtered['Modal_Price'].std()
-                st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
-                st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
-
-                if 'Month' in df_filtered.columns:
-                    monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
-                    best_month = monthly_avg.idxmax()
-                    worst_month = monthly_avg.idxmin()
-                    st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
-                    st.write(
-                        f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
-
-                if 'District Name' in df_filtered.columns:
-                    top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
-                    st.write(f"• **Highest Price District:** {top_district}")
+            # Price stability analysis
+            recent_volatility = df_filtered['Modal_Price'].tail(30).std()
+            overall_volatility = df_filtered['Modal_Price'].std()
+            stability_status = "stable" if recent_volatility < overall_volatility else "volatile"
+            
+            # Market trend
+            latest_price = df_filtered['Modal_Price'].iloc[-1]
+            prev_price = df_filtered['Modal_Price'].iloc[-2]
+            price_trend = "increasing" if latest_price > prev_price else "decreasing"
 
             st.write(
-                "💡 **Coconut Insights:** Coconuts have relatively stable prices throughout the year with moderate seasonal variations. Coastal regions typically show higher prices due to quality and demand.")
-
-        elif selected_crop_display == "Rice":
-            st.write("🍚 **Rice Market Analysis:**")
-            if 'Modal_Price' in df_filtered.columns:
-                avg_price = df_filtered['Modal_Price'].mean()
-                price_volatility = df_filtered['Modal_Price'].std()
-                st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
-                st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
-
-                if 'Month' in df_filtered.columns:
-                    monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
-                    best_month = monthly_avg.idxmax()
-                    worst_month = monthly_avg.idxmin()
-                    st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
-                    st.write(
-                        f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
-
-                if 'District Name' in df_filtered.columns:
-                    top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
-                    st.write(f"• **Highest Price District:** {top_district}")
-
-            st.write(
-                "💡 **Rice Insights:** Rice prices are influenced by harvest seasons and government policies. Prices often dip during harvest months and rise during lean periods.")
-
-        elif selected_crop_display == "Banana":
-            st.write("🍌 **Banana Market Analysis:**")
-            if 'Modal_Price' in df_filtered.columns:
-                avg_price = df_filtered['Modal_Price'].mean()
-                price_volatility = df_filtered['Modal_Price'].std()
-                st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
-                st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
-
-                if 'Month' in df_filtered.columns:
-                    monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
-                    best_month = monthly_avg.idxmax()
-                    worst_month = monthly_avg.idxmin()
-                    st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
-                    st.write(
-                        f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
-
-                if 'District Name' in df_filtered.columns:
-                    top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
-                    st.write(f"• **Highest Price District:** {top_district}")
-
-            st.write(
-                "💡 **Banana Insights:** Bananas have year-round availability but prices vary based on seasonal demand and supply. Prices typically peak during festivals and dip during peak harvest seasons.")
-
-        elif selected_crop_display == "Onion":
-            st.write("🧅 **Onion Market Analysis:**")
-            if 'Modal_Price' in df_filtered.columns:
-                avg_price = df_filtered['Modal_Price'].mean()
-                price_volatility = df_filtered['Modal_Price'].std()
-                st.write(f"• **Average Price:** ₹{avg_price:,.2f} per quintal")
-                st.write(f"• **Price Volatility:** ₹{price_volatility:,.2f} (standard deviation)")
-
-                if 'Month' in df_filtered.columns:
-                    monthly_avg = df_filtered.groupby('Month')['Modal_Price'].mean()
-                    best_month = monthly_avg.idxmax()
-                    worst_month = monthly_avg.idxmin()
-                    st.write(f"• **Best Month:** {calendar.month_name[best_month]} (₹{monthly_avg[best_month]:,.2f})")
-                    st.write(
-                        f"• **Worst Month:** {calendar.month_name[worst_month]} (₹{monthly_avg[worst_month]:,.2f})")
-
-                if 'District Name' in df_filtered.columns:
-                    top_district = df_filtered.groupby('District Name')['Modal_Price'].mean().idxmax()
-                    st.write(f"• **Highest Price District:** {top_district}")
-
-            st.write(
-                "💡 **Onion Insights:** Onions are known for high price volatility. Prices can spike dramatically during supply shortages and monsoon months, making them a critical commodity for price monitoring.")
+                f"💡 **{selected_crop_display} Insights:** "
+                f"Current market prices are {price_trend} and {stability_status}. "
+                f"The average price is ₹{avg_price:,.2f} per quintal, with {calendar.month_name[best_month]} "
+                f"typically showing the highest prices and {calendar.month_name[worst_month]} showing the lowest. "
+                f"{top_district} consistently reports higher prices compared to other districts."
+            )
 
         # Market trend analysis
         if 'Date' in df_filtered.columns and 'Modal_Price' in df_filtered.columns:
