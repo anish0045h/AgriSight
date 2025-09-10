@@ -8,11 +8,17 @@ This tool helps farmers, researchers, and policymakers explore market price tren
 🚀 Features
 
 ✅ Crop Selection – Choose from multiple crops stored in the database
+
 ✅ Dataset Preview – View raw data with cleaned column names and date parsing
+
 ✅ Interactive Filters – Filter by District, Market, Variety, Grade, and Date Range
+
 ✅ Summary Metrics – Quick overview of total varieties, grades, districts, and markets
+
 ✅ Crop-Specific Insights – Average price, volatility, best/worst months, top districts
+
 ✅ Market Trend Analysis – Price changes across years, seasonal patterns
+
 ✅ Data Visualizations
 
 📈 Average Price per Year (Line Chart)
